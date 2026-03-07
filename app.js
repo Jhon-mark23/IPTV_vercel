@@ -10,17 +10,10 @@ let isPlaying = false;
 let controlsTimeout;
 let hideControlsTimer;
 let currentQuality = 'auto';
-let touchStartTime = 0;
-let touchStartX = 0;
-let touchStartY = 0;
 
 // ==================== PLAYER CONFIGURATION ====================
 const PLAYER_CONFIG = {
-    CONTROLS_HIDE_DELAY: 5000, // 5 seconds
-    MOBILE_BREAKPOINT: 768,
-    TOAST_DURATION: 2000,
-    SEEK_STEP: 10, // seconds
-    VOLUME_STEP: 0.1
+    CONTROLS_HIDE_DELAY: 5000 // 5 seconds in milliseconds
 };
 
 // ==================== FAVORITES MANAGER ====================
@@ -273,10 +266,10 @@ async function handleChannelClick(channelName) {
         isPlaying = true;
         updatePlayPauseIcon(true);
         
-        // Show custom controls
+        // Show custom controls - make sure they're visible initially
         const controls = document.getElementById('customControls');
         controls.classList.remove('hidden');
-        controls.classList.add('visible');
+        controls.classList.add('visible'); // Use 'visible' class for opacity/transform
         
         // Initialize controls after a small delay
         setTimeout(() => {
@@ -507,18 +500,11 @@ function resetScrollPosition(shouldCloseSearch = true) {
 // ==================== DETECT DEVICE ====================
 function detectDevice() {
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const isSmallScreen = window.innerWidth <= PLAYER_CONFIG.MOBILE_BREAKPOINT;
-    
-    if (!isMobile && !isSmallScreen) {
+    if (!isMobile && window.innerWidth > 1024) {
         const mainContent = document.getElementById('main-content');
         const desktopBlocker = document.getElementById('desktopBlocker');
         if (mainContent) mainContent.style.display = 'none';
         if (desktopBlocker) desktopBlocker.style.display = 'flex';
-    } else {
-        const mainContent = document.getElementById('main-content');
-        const desktopBlocker = document.getElementById('desktopBlocker');
-        if (mainContent) mainContent.style.display = 'block';
-        if (desktopBlocker) desktopBlocker.style.display = 'none';
     }
 }
 
@@ -588,7 +574,7 @@ async function loadChannelData() {
     }
 }
 
-// ==================== CUSTOM VIDEO CONTROLS - MOBILE OPTIMIZED ====================
+// ==================== CUSTOM VIDEO CONTROLS ====================
 function initCustomControls() {
     const video = document.getElementById('video');
     const controls = document.getElementById('customControls');
@@ -597,116 +583,69 @@ function initCustomControls() {
     if (!video || !controls || !container) return;
     
     // Remove existing listeners to avoid duplicates
-    video.removeEventListener('click', handleVideoClick);
-    video.removeEventListener('touchstart', handleTouchStart);
-    video.removeEventListener('touchend', handleTouchEnd);
+    video.removeEventListener('click', toggleControls);
     container.removeEventListener('mousemove', showControlsTemporarily);
-    container.removeEventListener('touchstart', handleContainerTouch);
+    container.removeEventListener('touchstart', showControlsTemporarily);
     container.removeEventListener('mouseleave', handleMouseLeave);
     
-    // Add listeners - optimized for both mobile and desktop
+    // Add listeners to the container for better mouse detection
     container.addEventListener('mousemove', showControlsTemporarily);
+    container.addEventListener('touchstart', showControlsTemporarily);
     container.addEventListener('mouseleave', handleMouseLeave);
-    container.addEventListener('touchstart', handleContainerTouch, { passive: true });
-    video.addEventListener('click', handleVideoClick);
-    video.addEventListener('touchstart', handleTouchStart, { passive: true });
-    video.addEventListener('touchend', handleTouchEnd);
+    video.addEventListener('click', toggleControls);
     
-    // Make sure controls are visible initially
+    // Make controls visible initially
     controls.classList.add('visible');
-    controls.classList.remove('hidden');
     
     // Start the hide timer
     resetControlsTimer();
     
-    console.log('Custom controls initialized');
+    console.log('Custom controls initialized'); // Debug log
 }
 
-// Touch event handlers for mobile
-function handleTouchStart(e) {
-    touchStartTime = Date.now();
-    const touch = e.touches[0];
-    touchStartX = touch.clientX;
-    touchStartY = touch.clientY;
-}
-
-function handleTouchEnd(e) {
-    const touchEndTime = Date.now();
-    const touchDuration = touchEndTime - touchStartTime;
-    
-    // Short tap (less than 200ms) - toggle controls
-    if (touchDuration < 200) {
-        e.preventDefault();
-        toggleControls();
-    }
-}
-
-function handleContainerTouch(e) {
-    // Show controls on container touch
-    showControlsTemporarily();
-}
-
-// Mouse event handlers
 function handleMouseLeave() {
+    // When mouse leaves the container, start the timer to hide controls
     if (isPlaying) {
         resetControlsTimer();
     }
-}
-
-function handleVideoClick(event) {
-    event.stopPropagation();
-    toggleControls();
 }
 
 function showControlsTemporarily() {
     const controls = document.getElementById('customControls');
     if (!controls) return;
     
-    controls.classList.remove('hidden');
     controls.classList.add('visible');
     resetControlsTimer();
+    
+    console.log('Controls shown'); // Debug log
 }
 
 function resetControlsTimer() {
+    // Clear existing timer
     clearTimeout(hideControlsTimer);
     
+    // Only set new timer if video is playing
     if (isPlaying) {
         hideControlsTimer = setTimeout(() => {
             const controls = document.getElementById('customControls');
-            if (controls && !isMobileDevice()) {
+            if (controls) {
                 controls.classList.remove('visible');
-            } else if (controls && isMobileDevice() && !controls.classList.contains('force-visible')) {
-                // On mobile, only hide if not forced visible
-                controls.classList.remove('visible');
+                console.log('Controls hidden after timeout'); // Debug log
             }
         }, PLAYER_CONFIG.CONTROLS_HIDE_DELAY);
     }
-}
-
-function isMobileDevice() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-           window.innerWidth <= PLAYER_CONFIG.MOBILE_BREAKPOINT;
 }
 
 function toggleControls() {
     const controls = document.getElementById('customControls');
     if (!controls) return;
     
+    controls.classList.toggle('visible');
+    
     if (controls.classList.contains('visible')) {
-        controls.classList.remove('visible');
-        clearTimeout(hideControlsTimer);
-    } else {
-        controls.classList.remove('hidden');
-        controls.classList.add('visible');
         resetControlsTimer();
-        
-        // On mobile, add a temporary force class
-        if (isMobileDevice()) {
-            controls.classList.add('force-visible');
-            setTimeout(() => {
-                controls.classList.remove('force-visible');
-            }, 300);
-        }
+    } else {
+        clearTimeout(hideControlsTimer);
     }
 }
 
@@ -778,17 +717,6 @@ function toggleFullscreen() {
         } else if (container.msRequestFullscreen) {
             container.msRequestFullscreen();
         }
-        
-        // Prevent screen sleep
-        if ('wakeLock' in navigator) {
-            try {
-                navigator.wakeLock.request('screen').catch(e => {
-                    console.log('Wake lock not supported:', e);
-                });
-            } catch (e) {
-                console.log('Wake lock error:', e);
-            }
-        }
     } else {
         // Exit fullscreen
         if (document.exitFullscreen) {
@@ -820,7 +748,7 @@ function handleFullscreenChange() {
             fullscreenBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                 <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
             </svg>`;
-            // Try to lock to landscape again
+            // Try to lock to landscape again (for some browsers)
             if (screen.orientation && screen.orientation.lock) {
                 screen.orientation.lock('landscape').catch(() => {});
             }
@@ -841,13 +769,6 @@ function toggleQualityMenu(event) {
     event.stopPropagation();
     const menu = document.getElementById('qualityMenu');
     menu.classList.toggle('hidden');
-    
-    // On mobile, prevent body scroll when menu is open
-    if (!menu.classList.contains('hidden')) {
-        document.body.style.overflow = 'hidden';
-    } else {
-        document.body.style.overflow = '';
-    }
 }
 
 function setQuality(quality, event) {
@@ -861,7 +782,6 @@ function setQuality(quality, event) {
     event.target.classList.add('active');
     
     document.getElementById('qualityMenu').classList.add('hidden');
-    document.body.style.overflow = ''; // Restore scrolling
     
     if (player && quality !== 'auto') {
         try {
@@ -909,22 +829,13 @@ function updateProgress() {
 function seekVideo(event) {
     const video = document.getElementById('video');
     const rect = event.currentTarget.getBoundingClientRect();
-    
-    // Get touch or mouse position
-    let clientX;
-    if (event.touches) {
-        clientX = event.touches[0].clientX;
-    } else {
-        clientX = event.clientX;
-    }
-    
-    const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const percent = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     video.currentTime = percent * video.duration;
     showControlsTemporarily();
 }
 
 // ==================== TOAST NOTIFICATION ====================
-function showToast(message, duration = PLAYER_CONFIG.TOAST_DURATION) {
+function showToast(message, duration = 2000) {
     const toast = document.getElementById('toast');
     if (!toast) return;
     
@@ -948,9 +859,6 @@ document.addEventListener('keydown', (e) => {
     // Don't trigger shortcuts when typing in search
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     
-    // Don't trigger on mobile
-    if (isMobileDevice()) return;
-    
     switch(e.key.toLowerCase()) {
         case ' ':
         case 'k':
@@ -968,25 +876,41 @@ document.addEventListener('keydown', (e) => {
             break;
         case 'arrowright':
             e.preventDefault();
-            video.currentTime += PLAYER_CONFIG.SEEK_STEP;
-            showToast(`+${PLAYER_CONFIG.SEEK_STEP}s`);
+            video.currentTime += 10;
+            showToast(`+10s`);
             showControlsTemporarily();
             break;
         case 'arrowleft':
             e.preventDefault();
-            video.currentTime -= PLAYER_CONFIG.SEEK_STEP;
-            showToast(`-${PLAYER_CONFIG.SEEK_STEP}s`);
+            video.currentTime -= 10;
+            showToast(`-10s`);
             showControlsTemporarily();
             break;
         case 'arrowup':
             e.preventDefault();
-            video.volume = Math.min(video.volume + PLAYER_CONFIG.VOLUME_STEP, 1);
+            video.volume = Math.min(video.volume + 0.1, 1);
             showToast(`Volume: ${Math.round(video.volume * 100)}%`);
             break;
         case 'arrowdown':
             e.preventDefault();
-            video.volume = Math.max(video.volume - PLAYER_CONFIG.VOLUME_STEP, 0);
+            video.volume = Math.max(video.volume - 0.1, 0);
             showToast(`Volume: ${Math.round(video.volume * 100)}%`);
+            break;
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            e.preventDefault();
+            const percent = parseInt(e.key) / 10;
+            video.currentTime = percent * video.duration;
+            showToast(`${parseInt(e.key) * 10}%`);
+            showControlsTemporarily();
             break;
     }
 });
@@ -998,7 +922,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load channel data
     loadChannelData();
 
-    // Setup search with mobile optimization
+    // Setup search
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
         searchInput.addEventListener('input', function() {
@@ -1014,17 +938,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 smartCloseSearch();
                 setTimeout(() => resetScrollPosition(false), 150);
-            }
-        });
-        
-        // On mobile, close search when tapping outside
-        searchInput.addEventListener('blur', function() {
-            if (this.value.trim() === '') {
-                setTimeout(() => {
-                    if (!this.matches(':focus')) {
-                        smartCloseSearch();
-                    }
-                }, 200);
             }
         });
     }
@@ -1047,7 +960,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (menu && !menu.classList.contains('hidden') && 
             !menu.contains(event.target) && !btn.contains(event.target)) {
             menu.classList.add('hidden');
-            document.body.style.overflow = ''; // Restore scrolling
         }
     });
 
@@ -1077,7 +989,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const progressSection = document.getElementById('progressSection');
         if (progressSection) {
             progressSection.addEventListener('click', seekVideo);
-            progressSection.addEventListener('touchstart', seekVideo, { passive: false });
         }
         
         video.addEventListener('playing', () => {
@@ -1090,12 +1001,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const liveIndicator = document.getElementById('liveIndicator');
             liveIndicator.classList.remove('status-offline');
             liveIndicator.classList.add('status-live');
+            
+            // Make sure controls are visible when playback starts
             showControlsTemporarily();
         });
         
         video.addEventListener('pause', () => {
             isPlaying = false;
             updatePlayPauseIcon(false);
+            
             // Keep controls visible when paused
             const controls = document.getElementById('customControls');
             controls.classList.add('visible');
@@ -1118,13 +1032,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('streamStatusText').textContent = 'Playback Error';
         });
     }
-    
-    // Prevent pull-to-refresh on mobile when video is playing
-    document.body.addEventListener('touchstart', (e) => {
-        if (document.getElementById('playerContainer').classList.contains('active') && e.target.closest('.video-container')) {
-            e.preventDefault();
-        }
-    }, { passive: false });
 });
 
 // ==================== EXPOSE FUNCTIONS GLOBALLY ====================
