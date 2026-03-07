@@ -327,7 +327,7 @@ button:focus, button:active, .star-btn:focus {
     align-items: center;
     justify-content: space-between;
     position: relative;
-    z-index: 31;
+    z-index: 21;
 }
 
 .controls-left, .controls-right {
@@ -414,20 +414,20 @@ button:focus, button:active, .star-btn:focus {
 .quality-btn span {
     color: var(--accent);
     margin-left: 4px;
-    font-weight: 700;
+    font-weight: 500;
 }
 
 .quality-menu {
     position: absolute;
     bottom: 50px;
     right: 0;
-    width: 130px;
+    width: 100px;
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
-    z-index: 40;
+    z-index: 20;
     transform-origin: bottom right;
     animation: menuPop 0.2s ease;
     backdrop-filter: blur(10px);
@@ -435,7 +435,7 @@ button:focus, button:active, .star-btn:focus {
 }
 
 .quality-menu-content {
-    max-height: 200px;
+    max-height: 120px;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--accent) var(--border-subtle);
