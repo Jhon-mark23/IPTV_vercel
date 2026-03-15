@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="dark only">
+    <meta name="supported-color-schemes" content="dark">
+    
+    <title>NoodTayo - Production Player</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.16.12/dist/shaka-player.ui.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/shaka-player@4.16.12/dist/controls.min.css" rel="stylesheet">
+    
+    <style>
+        /* ===== RESET & BASE ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0a;
+            background: radial-gradient(circle at 20% 20%, #1a1a1a, #000000);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        /* ===== PRODUCTION PLAYER CONTAINER ===== */
+        .production-player {
+            width: 100%;
+            max-width: 420px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* ===== PLAYER CARD ===== */
+        .player-card {
+            background: rgba(18, 18, 18, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 32px;
+            overflow: hidden;
+            box-shadow: 
+                0 25px 50px -12px rgba(0, 0, 0, 0.8),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+        }
+
+        /* ===== VIDEO CONTAINER ===== */
+        .video-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+
+        /* ===== CUSTOM CONTROLS ===== */
+        .custom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, 
+                rgba(0, 0, 0, 0.9) 0%,
+                rgba(0, 0, 0, 0.5) 50%,
+                transparent 100%);
+            padding: 15px 10px 10px;
+            transform: translateY(0);
+            transition: transform 0.3s ease;
+            z-index: 10;
+        }
+
+        .custom-controls.hidden {
+            transform: translateY(100%);
+        }
+
+        /* Progress Bar */
+        .progress-section {
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        .progress-bar-container {
+            position: relative;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-buffer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            transition: width 0.2s ease;
+        }
+
+        .progress-played {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: #f59e0b;
+            border-radius: 4px;
+            transition: width 0.1s ease;
+        }
+
+        .progress-handle {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            background: #f59e0b;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .progress-section:hover .progress-handle {
+            opacity: 1;
+        }
+
+        /* Control Buttons Row */
+        .controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .controls-left, .controls-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .control-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            width: 40px;
+            height: 40px;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.1);
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .time-display {
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.8);
+            letter-spacing: 0.5px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Quality Selector - UPDATED with scrollable menu */
+        .quality-selector {
+            position: relative;
+        }
+
+        .quality-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            transition: all 0.2s ease;
+        }
+
+        .quality-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .quality-btn span {
+            color: #f59e0b;
+            margin-left: 2px;
+        }
+
+        .quality-menu {
+            position: absolute;
+            bottom: 50px;
+            right: 0;
+            width: 90px;
+            background: rgba(24, 24, 27, 0.98);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            z-index: 30;
+            transform-origin: bottom right;
+            animation: menuPop 0.2s ease;
+        }
+
+        /* NEW: Scrollable quality menu */
+        .quality-menu-content {
+            max-height: 120px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #f59e0b rgba(255, 255, 255, 0.1);
+        }
+
+        /* Custom scrollbar for WebKit browsers */
+        .quality-menu-content::-webkit-scrollbar {
+            width: 2px;
+        }
+
+        .quality-menu-content::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .quality-menu-content::-webkit-scrollbar-thumb {
+            background: #f59e0b;
+            border-radius: 10px;
+        }
+
+        .quality-menu-content::-webkit-scrollbar-thumb:hover {
+            background: #fbbf24;
+        }
+
+        @keyframes menuPop {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .quality-menu.hidden {
+            display: none;
+        }
+
+        .quality-option {
+            width: 100%;
+            padding: 9px 10px;
+            text-align: left;
+            font-size: 10px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+            background: none;
+            border: none;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quality-option:last-child {
+            border-bottom: none;
+        }
+
+        .quality-option:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            padding-left: 15px;
+        }
+
+        .quality-option.active {
+            color: #f59e0b;
+            font-weight: 600;
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        /* Fullscreen Button */
+        .fullscreen-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 30px;
+            padding: 6px 12px;
+            gap: 6px;
+        }
+
+        /* ===== METADATA SECTION ===== */
+        .metadata-section {
+            padding: 20px;
+            background: rgba(18, 18, 18, 0.98);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .channel-info-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .channel-logo-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .channel-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px -10px rgba(239, 68, 68, 0.5);
+        }
+
+        .channel-logo.kapamilya {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        .channel-logo svg {
+            width: 28px;
+            height: 28px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        .channel-title h3 {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.3px;
+        }
+
+        .channel-title p {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            margin: 4px 0 0;
+            font-weight: 500;
+        }
+
+        /* Live Indicator */
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 30px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .live-indicator span {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #ef4444;
+        }
+
+        /* Channel Stats */
+        .channel-stats {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .stat-item svg {
+            opacity: 0.7;
+        }
+
+        /* ===== CHANNEL SELECTOR ===== */
+        .channel-selector {
+            margin-top: 24px;
+        }
+
+        .selector-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .selector-header h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .selector-header span {
+            font-size: 12px;
+            color: #f59e0b;
+            font-weight: 600;
+        }
+
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .channel-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 16px 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .channel-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #f59e0b, #ef4444);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .channel-item.active {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: rgba(245, 158, 11, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .channel-item.active::before {
+            opacity: 1;
+        }
+
+        .channel-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .item-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .item-logo.hoa {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .item-logo.abs {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        .item-info h5 {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .item-info p {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 500;
+        }
+
+        .item-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: #22c55e;
+            color: white;
+            font-size: 8px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 20px;
+            letter-spacing: 0.5px;
+        }
+
+        /* ===== LOADING OVERLAY ===== */
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-content {
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 56px;
+            height: 56px;
+            border: 4px solid rgba(245, 158, 11, 0.2);
+            border-top-color: #f59e0b;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        .loading-content p {
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ===== TOAST NOTIFICATION ===== */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(24, 24, 27, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 30px;
+            padding: 12px 24px;
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 480px) {
+            .channel-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls-right {
+                gap: 8px;
+            }
+            
+            .quality-btn span {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="production-player">
+        <!-- Main Player Card -->
+        <div class="player-card">
+            <!-- Video Container -->
+            <div class="video-container" id="videoContainer">
+                <video id="video" autoplay playsinline></video>
+                
+                <!-- Custom Controls -->
+                <div id="customControls" class="custom-controls">
+                    <!-- Progress Bar -->
+                    <div class="progress-section" id="progressSection">
+                        <div class="progress-bar-container">
+                            <div id="progressBuffer" class="progress-buffer" style="width: 0%"></div>
+                            <div id="progressPlayed" class="progress-played" style="width: 0%"></div>
+                            <div id="progressHandle" class="progress-handle" style="left: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Control Buttons -->
+                    <div class="controls-row">
+                        <div class="controls-left">
+                            <button id="playPauseBtn" class="control-btn" onclick="togglePlayPause()">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                                    <polygon points="5,3 19,12 5,21" id="playIcon" style="display: none;"/>
+                                    <rect x="5" y="3" width="4" height="18" id="pauseIcon" fill="white"/>
+                                    <rect x="15" y="3" width="4" height="18" id="pauseIcon2" fill="white"/>
+                                </svg>
+                            </button>
+                            <span id="timeDisplay" class="time-display">00:00 / 00:00</span>
+                        </div>
+                        
+                        <div class="controls-right">
+                            <!-- Quality Selector - UPDATED with scrollable menu structure -->
+                            <div class="quality-selector">
+                                <button id="qualityBtn" class="quality-btn" onclick="toggleQualityMenu(event)">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                                        <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>
+                                    </svg>
+                                    <span id="currentQuality">Auto</span>
+                                </button>
+                                <div id="qualityMenu" class="quality-menu hidden">
+                                    <!-- UPDATED: Added scrollable content container -->
+                                    <div class="quality-menu-content">
+                                        <button onclick="setQuality('auto', event)" class="quality-option active">Auto</button>
+                                        <button onclick="setQuality('1080p', event)" class="quality-option">1080p</button>
+                                        <button onclick="setQuality('720p', event)" class="quality-option">720p</button>
+                                        <button onclick="setQuality('480p', event)" class="quality-option">480p</button>
+                                        <button onclick="setQuality('360p', event)" class="quality-option">360p</button>
+                                        <button onclick="setQuality('240p', event)" class="quality-option">240p</button>
+                                        <button onclick="setQuality('144p', event)" class="quality-option">144p</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Fullscreen Button -->
+                            <button id="fullscreenBtn" class="control-btn fullscreen-btn" onclick="toggleFullscreen()">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Loading Overlay -->
+                <div id="loadingOverlay" class="loading-overlay">
+                    <div class="loading-content">
+                        <div class="loading-spinner"></div>
+                        <p id="loadingText">Loading hoa 7...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Metadata Section -->
+            <div class="metadata-section">
+                <div class="channel-info-row">
+                    <div class="channel-logo-title">
+                        <div id="channelLogo" class="channel-logo hoa">
+                            <svg viewBox="0 0 24 24" fill="white">
+                                <text x="4" y="18" font-family="Inter" font-weight="800" font-size="14">hoa</text>
+                            </svg>
+                        </div>
+                        <div class="channel-title">
+                            <h3 id="channelName">hoa 7</h3>
+                            <p id="channelStatus">Now Playing</p>
+                        </div>
+                    </div>
+                    
+                    <div class="live-indicator">
+                        <span class="live-dot"></span>
+                        <span>LIVE</span>
+                    </div>
+                </div>
+                
+                <div class="channel-stats">
+                    <div class="stat-item">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2"/>
+                        </svg>
+                        <span id="channelCategory">Entertainment</span>
+                    </div>
+                    <div class="stat-item">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        <span id="viewerCount">1.2k watching</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Channel Selector -->
+        <div class="channel-selector">
+            <div class="selector-header">
+                <h4>Available Channels</h4>
+                <span>2 Live</span>
+            </div>
+            
+            <div class="channel-grid">
+                <!-- hoa 7 Channel -->
+                <div class="channel-item active" id="hoaChannel" onclick="loadChannel('hoa')">
+                    <div class="item-logo hoa">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                            <text x="2" y="20" font-family="Inter" font-weight="800" font-size="16">hoa</text>
+                        </svg>
+                    </div>
+                    <div class="item-info">
+                        <h5>hoa 7</h5>
+                        <p>Entertainment</p>
+                    </div>
+                    <span class="item-badge">LIVE</span>
+                </div>
+                
+                <!-- Kapamilya Channel -->
+                <div class="channel-item" id="kapamilyaChannel" onclick="loadChannel('kapamilya')">
+                    <div class="item-logo abs">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                            <text x="0" y="20" font-family="Inter" font-weight="800" font-size="12">ABS</text>
+                        </svg>
+                    </div>
+                    <div class="item-info">
+                        <h5>Kapamilya</h5>
+                        <p>Entertainment</p>
+                    </div>
+                    <span class="item-badge">LIVE</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Quality changed to 1080p</div>
+
+    <script>
+        // ==================== CONFIGURATION ====================
+        let player = null;
+        let currentChannel = null;
+        let isPlaying = false;
+        let controlsTimeout;
+        let hideControlsTimer;
+        
+        const channels = {
+            hoa: {
+                name: 'HEART OF ASIA ',
+                logo: 'hoa',
+                category: 'Entertainment',
+                viewers: '1.2k',
+                stream: {
+                    url: 'https://hls.nathcreqtives.com/playlist.m3u8?id=1&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJNb29uIiwiaWF0IjoxNzcyNTg1NDEyLCJleHAiOjE3NzM4ODE0MTIsImFjY291bnRFeHBpcmVkIjpmYWxzZSwiYWNjb3VudEV4cGlyZXNBdCI6MTc3Mzg4MTQxMn0.pWBHcolaeZXd-5DAkMobbJn5DbFoSTDEWYuQn0LC5U4'
+                }
+            },
+            kapamilya: {
+                name: 'tv5',
+                logo: 'abs',
+                category: 'Entertainment',
+                viewers: '2.5k',
+                stream: {
+                    url: 'https://qp-pldt-live-bpk-02-prod.akamaized.net/bpk-tv/tv5_hd/default1/index.mpd',
+                    drm: {
+                        '2615129ef2c846a9bbd43a641c7303ef': '07c7f996b1734ea288641a68e1cfdc4d'
+                    }
+                }
+            }
+        };
+
+        // ==================== INITIALIZE PLAYER ====================
+        async function initPlayer() {
+            if (player) return player;
+            
+            return new Promise((resolve) => {
+                shaka.polyfill.installAll();
+                
+                const video = document.getElementById('video');
+                player = new shaka.Player(video);
+                
+                // Configure player for production
+                player.configure({
+                    streaming: {
+                        bufferingGoal: 30,
+                        rebufferingGoal: 15,
+                        bufferBehind: 30,
+                        ignoreTextStreamFailures: true,
+                        alwaysStreamText: false,
+                        startAtSegmentBoundary: true,
+                        smallGapLimit: 0.5,
+                        jumpLargeGaps: true
+                    },
+                    manifest: {
+                        dash: {
+                            ignoreMinBufferTime: true,
+                            defaultPresentationDelay: 5
+                        }
+                    },
+                    abr: {
+                        enabled: true,
+                        defaultBandwidthEstimate: 1000000,
+                        restrictions: {
+                            minHeight: 360,
+                            maxHeight: 1080
+                        }
+                    }
+                });
+
+                // Error handling
+                player.addEventListener('error', (event) => {
+                    console.error('Player error:', event.detail);
+                    showToast('Playback error - retrying...');
+                    setTimeout(() => {
+                        if (currentChannel) {
+                            loadChannel(currentChannel === channels.hoa ? 'hoa' : 'kapamilya');
+                        }
+                    }, 3000);
+                });
+
+                resolve(player);
+            });
+        }
+
+        // ==================== LOAD CHANNEL ====================
+        async function loadChannel(channelId) {
+            const channel = channels[channelId];
+            if (!channel) return;
+            
+            // Update UI
+            currentChannel = channel;
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('loadingText').textContent = `Loading ${channel.name}...`;
+            document.getElementById('channelName').textContent = channel.name;
+            document.getElementById('channelCategory').textContent = channel.category;
+            document.getElementById('viewerCount').textContent = `${channel.viewers} watching`;
+            document.getElementById('channelStatus').textContent = 'Connecting...';
+            
+            // Update active state
+            document.querySelectorAll('.channel-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.getElementById(`${channelId}Channel`).classList.add('active');
+            
+            // Update logo
+            const logoEl = document.getElementById('channelLogo');
+            logoEl.className = `channel-logo ${channel.logo}`;
+            if (channel.logo === 'hoa') {
+                logoEl.innerHTML = '<svg viewBox="0 0 24 24" fill="white"><text x="4" y="18" font-family="Inter" font-weight="800" font-size="14">hoa</text></svg>';
+            } else {
+                logoEl.innerHTML = '<svg viewBox="0 0 24 24" fill="white"><text x="2" y="18" font-family="Inter" font-weight="800" font-size="12">ABS</text></svg>';
+            }
+            
+            try {
+                // Initialize player
+                await initPlayer();
+                
+                // Configure DRM if present
+                if (channel.stream.drm) {
+                    player.configure({
+                        drm: {
+                            clearKeys: channel.stream.drm
+                        }
+                    });
+                }
+                
+                // Load the stream
+                await player.load(channel.stream.url);
+                
+                // Auto-play
+                const video = document.getElementById('video');
+                await video.play();
+                isPlaying = true;
+                updatePlayPauseIcon(true);
+                
+                // Update status
+                document.getElementById('channelStatus').textContent = 'Now Playing';
+                showToast(`Now watching ${channel.name}`);
+                
+                // Get available qualities
+                setTimeout(() => {
+                    try {
+                        const tracks = player.getVariantTracks();
+                        if (tracks.length > 0) {
+                            const qualities = [...new Set(tracks.map(t => t.height))];
+                            qualities.sort((a, b) => b - a);
+                            
+                            const menu = document.querySelector('.quality-menu-content');
+                            menu.innerHTML = '<button onclick="setQuality(\'auto\', event)" class="quality-option active">Auto</button>';
+                            
+                            qualities.forEach(height => {
+                                const btn = document.createElement('button');
+                                btn.className = 'quality-option';
+                                btn.setAttribute('onclick', `setQuality('${height}p', event)`);
+                                btn.textContent = `${height}p`;
+                                menu.appendChild(btn);
+                            });
+                        }
+                    } catch (e) {
+                        console.log('No quality tracks available');
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Playback error:', error);
+                document.getElementById('channelStatus').textContent = 'Offline';
+                showToast('Failed to load channel', 3000);
+            } finally {
+                setTimeout(() => {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                }, 500);
+            }
+        }
+
+        // ==================== PLAYER CONTROLS ====================
+        function togglePlayPause() {
+            const video = document.getElementById('video');
+            if (video.paused) {
+                video.play();
+                isPlaying = true;
+                showToast('Playing');
+            } else {
+                video.pause();
+                isPlaying = false;
+                showToast('Paused');
+            }
+            updatePlayPauseIcon(!video.paused);
+        }
+
+        function updatePlayPauseIcon(isPlaying) {
+            const playIcon = document.getElementById('playIcon');
+            const pauseIcons = document.querySelectorAll('#pauseIcon, #pauseIcon2');
+            
+            if (isPlaying) {
+                playIcon.style.display = 'none';
+                pauseIcons.forEach(icon => icon.style.display = 'block');
+            } else {
+                playIcon.style.display = 'block';
+                pauseIcons.forEach(icon => icon.style.display = 'none');
+            }
+        }
+
+        // ==================== QUALITY CONTROL ====================
+        function toggleQualityMenu(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('qualityMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        function setQuality(quality, event) {
+            event.stopPropagation();
+            
+            document.getElementById('currentQuality').textContent = quality === 'auto' ? 'Auto' : quality;
+            
+            document.querySelectorAll('.quality-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            document.getElementById('qualityMenu').classList.add('hidden');
+            
+            if (player && quality !== 'auto') {
+                try {
+                    const height = parseInt(quality.replace('p', ''));
+                    const tracks = player.getVariantTracks();
+                    const track = tracks.find(t => t.height === height);
+                    if (track) {
+                        player.selectVariantTrack(track, true);
+                        showToast(`Quality: ${quality}`);
+                    }
+                } catch (e) {
+                    console.log('Quality selection not available');
+                }
+            } else if (player) {
+                player.configure({ abr: { enabled: true } });
+                showToast('Quality: Auto');
+            }
+        }
+
+        // ==================== FULLSCREEN ====================
+        function toggleFullscreen() {
+            const container = document.getElementById('videoContainer');
+            
+            if (!document.fullscreenElement) {
+                if (container.requestFullscreen) {
+                    container.requestFullscreen();
+                } else if (container.webkitRequestFullscreen) {
+                    container.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        }
+
+        // ==================== PROGRESS BAR ====================
+        function updateProgress() {
+            const video = document.getElementById('video');
+            const progressPlayed = document.getElementById('progressPlayed');
+            const progressHandle = document.getElementById('progressHandle');
+            const timeDisplay = document.getElementById('timeDisplay');
+            
+            if (video.duration) {
+                const playedPercent = (video.currentTime / video.duration) * 100;
+                progressPlayed.style.width = `${playedPercent}%`;
+                progressHandle.style.left = `${playedPercent}%`;
+                
+                const current = formatTime(video.currentTime);
+                const duration = formatTime(video.duration);
+                timeDisplay.textContent = `${current} / ${duration}`;
+            }
+            
+            // Update buffer
+            if (video.buffered.length > 0) {
+                const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+                const bufferedPercent = (bufferedEnd / video.duration) * 100;
+                document.getElementById('progressBuffer').style.width = `${bufferedPercent}%`;
+            }
+        }
+
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return '00:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function seekVideo(event) {
+            const video = document.getElementById('video');
+            const rect = event.currentTarget.getBoundingClientRect();
+            const percent = (event.clientX - rect.left) / rect.width;
+            video.currentTime = percent * video.duration;
+        }
+
+        // ==================== CONTROLS VISIBILITY ====================
+        function showControls() {
+            const controls = document.getElementById('customControls');
+            controls.classList.remove('hidden');
+            
+            clearTimeout(hideControlsTimer);
+            if (isPlaying) {
+                hideControlsTimer = setTimeout(() => {
+                    controls.classList.add('hidden');
+                }, 3000);
+            }
+        }
+
+        // ==================== TOAST NOTIFICATION ====================
+        function showToast(message, duration = 2000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        // ==================== INITIALIZE ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load hoa 7 by default
+            setTimeout(() => {
+                loadChannel('hoa');
+            }, 500);
+            
+            // Video event listeners
+            const video = document.getElementById('video');
+            const progressSection = document.getElementById('progressSection');
+            
+            video.addEventListener('timeupdate', updateProgress);
+            video.addEventListener('loadedmetadata', updateProgress);
+            video.addEventListener('progress', updateProgress);
+            
+            progressSection.addEventListener('click', seekVideo);
+            
+            // Controls visibility
+            const container = document.getElementById('videoContainer');
+            container.addEventListener('mousemove', showControls);
+            container.addEventListener('touchstart', showControls);
+            
+            video.addEventListener('playing', () => {
+                isPlaying = true;
+                updatePlayPauseIcon(true);
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            });
+            
+            video.addEventListener('waiting', () => {
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.getElementById('loadingText').textContent = 'Buffering...';
+            });
+            
+            // Close quality menu when clicking outside
+            document.addEventListener('click', (event) => {
+                const menu = document.getElementById('qualityMenu');
+                const btn = document.getElementById('qualityBtn');
+                if (menu && !menu.contains(event.target) && !btn.contains(event.target)) {
+                    menu.classList.add('hidden');
+                }
+            });
+            
+            // Fullscreen change
+            document.addEventListener('fullscreenchange', updateFullscreenIcon);
+            document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+            
+            function updateFullscreenIcon() {
+                const btn = document.getElementById('fullscreenBtn');
+                if (document.fullscreenElement) {
+                    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                        <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
+                    </svg>`;
+                } else {
+                    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                        <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                    </svg>`;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
