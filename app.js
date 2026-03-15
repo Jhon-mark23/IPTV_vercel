@@ -498,7 +498,7 @@ function resetScrollPosition(shouldCloseSearch = true) {
 }
 
 // ==================== DETECT DEVICE ====================
-function detectDevice() {
+/*function detectDevice() {
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     if (!isMobile && window.innerWidth > 1024) {
         const mainContent = document.getElementById('main-content');
@@ -506,7 +506,7 @@ function detectDevice() {
         if (mainContent) mainContent.style.display = 'none';
         if (desktopBlocker) desktopBlocker.style.display = 'flex';
     }
-}
+}*/
 
 // ==================== SORT CHANNELS BY NEW ====================
 function sortChannelsByNew(data) {
