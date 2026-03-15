@@ -1,4 +1,4 @@
-// ==================== CONFIGURATION ====================
+// ==================== CONFIGURATION new ====================
 let CHANNELS_CONFIG = [];
 let currentView = 'all';
 let selectedCategory = null;
