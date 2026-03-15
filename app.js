@@ -497,17 +497,6 @@ function resetScrollPosition(shouldCloseSearch = true) {
     }
 }
 
-// ==================== DETECT DEVICE ====================
-/*function detectDevice() {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (!isMobile && window.innerWidth > 1024) {
-        const mainContent = document.getElementById('main-content');
-        const desktopBlocker = document.getElementById('desktopBlocker');
-        if (mainContent) mainContent.style.display = 'none';
-        if (desktopBlocker) desktopBlocker.style.display = 'flex';
-    }
-}*/
-
 // ==================== SORT CHANNELS BY NEW ====================
 function sortChannelsByNew(data) {
     const now = new Date();
@@ -917,8 +906,6 @@ document.addEventListener('keydown', (e) => {
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', () => {
-    detectDevice();
-    
     // Load channel data
     loadChannelData();
 
@@ -977,7 +964,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Scroll listener for back to top
     window.addEventListener('scroll', updateBackToTopVisibility);
-    window.addEventListener('resize', detectDevice);
     
     // Handle video events
     const video = document.getElementById('video');
