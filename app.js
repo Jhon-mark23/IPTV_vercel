@@ -1,4 +1,4 @@
-// ==================== CONFIGURATION new ====================
+// ==================== CONFIGURATION ====================
 let CHANNELS_CONFIG = [];
 let currentView = 'all';
 let selectedCategory = null;
@@ -532,7 +532,7 @@ function renderCategories() {
 async function loadChannelData() {
     try {
         // Try to load from channels.json
-        const response = await fetch('channels.json');
+        const response = await fetch('updated_channels.json');
         if (!response.ok) throw new Error('Failed to load channels');
         
         const data = await response.json();
