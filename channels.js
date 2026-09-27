@@ -469,6 +469,13 @@ window.CHANNELS = [
         logo: "https://poster.starhubgo.com/Linear_channels2/316_1920x1080_HTV.png"
     },
     {
+        name: "Cartoonito",
+        type: "mpd",
+        category: "converge kids cartoon",
+        src: "http://136.239.159.18:6610/001/2/ch00000090990000001125/manifest.mpd?AuthInfo=v87HD9rEhwHiAdYyrP20TsXah2%2FZLFNNIdWrVrXDMAoZQDeIq8A03ROpfeWN75MYytokK1MIobcue1ImXa0ZEA%3D%3D&version=v1.0&BreakPoint=0&virtualDomain=001.live_hls.zte.com&programid=ch00000000000000001238&contentid=ch00000000000000001238&videoid=ch00000090990000001125&recommendtype=0&userid=1642489849443&boid=001&stbid=02%3A00%3A00%3A00%3A00%3A00&terminalflag=1&profilecode=&usersessionid=9X3U5ZPDLQVXXX&NeedJITP=1&JITPMediaType=DASH&JITPDRMType=NO",
+        logo: "https://poster.starhubgo.com/Linear_channels2/316_1920x1080_HTV.png"
+    },
+    {
         name: "DreamWorks",
         type: "mpd",
         category: "cignal kids cartoon movie family",
