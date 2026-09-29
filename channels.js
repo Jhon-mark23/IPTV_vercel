@@ -2117,16 +2117,38 @@ window.CHANNELS = [
         src: "https://livestream.pbskids.org/out/v1/3fe3030a2c8045a3932f4289d9eba3e6/mst.m3u8"
     },
     {
-        name: "PBS Kids Pacific",
-        type: "hls",
-        category: "kids cartoon",
-        src: "https://livestream.pbskids.org/out/v1/11f2e6b73eaa4887b3746cb863960e79/pst.m3u8"
-    },
-    {
         name: "Tom And Jerry",
         type: "hls",
         category: "kids cartoon",
         src: "https://live20.bozztv.com/giatvplayout7/giatv-208314/playlist.m3u8"
+    },
+    {
+        "name": "BabySharkTV.us",
+        "type": "m3u8",
+        "category": "kids cartoon",
+        "src": "https://c0c65b821b3542c3a4dca92702f59944.mediatailor.us-east-1.amazonaws.com/v1/master/04fd913bb278d8775298c26fdca9d9841f37601f/RakutenTV-eu_BabySharkTV/playlist.m3u8",
+        "logo": "https://i.imgur.com/SbBKr8L.png"
+    },
+    {
+        "name": "Kartoon Channel!",
+        "type": "m3u8",
+        "category": "kids",
+        "src": "https://aegis-cloudfront-1.tubi.video/ba23a03c-22ff-4a48-ae7e-dd8bf4ee4e29/kc_co.m3u8",
+        "logo": "https://i.imgur.com/1luzP3T.png"
+    },
+    {
+        "name": "BabyFirst",
+        "type": "m3u8",
+        "category": "kids",
+        "src": "https://cdn.fast.jwp.services/v1/channel/1_jB6940Ei_TvhvIHDL/manifest.m3u8",
+        "logo": "https://i.imgur.com/WxLHBwu.png"
+    },
+    {
+        "name": "PBS Kids",
+        "type": "m3u8",
+        "category": "education;kids",
+        "src": "https://livestream.pbskids.org/out/v1/14507d931bbe48a69287e4850e53443c/est.m3u8",
+        "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/PBS_Kids_logo_%282022%29.svg/960px-PBS_Kids_logo_%282022%29.svg.png"
     },
 
     /* ============================================================
