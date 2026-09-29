@@ -242,7 +242,6 @@
             border-color: #fff;
         }
 
-        /* ============ CHANNEL LIST SECTION ============ */
         .channel-list-section {
             background: var(--panel);
             border: 1px solid var(--border);
@@ -657,7 +656,7 @@ const CONVERGE_STREAM_HOSTS = new Set([
 ]);
 
 /* ============================================================
-   CHANNELS (loaded from ./channels.js)
+   CHANNELS (loaded from ./channels.m3u)
    ============================================================ */
 let CHANNELS = [];
 
@@ -734,6 +733,192 @@ function isFavorite(ch) { return favoriteKeys.has(channelKey(ch)); }
 function isPinned(ch)   { return pinnedKeys.has(channelKey(ch)); }
 
 /* ============================================================
+   M3U PARSER
+   ------------------------------------------------------------
+   Parses standard #EXTM3U / #EXTINF format into channel objects.
+   Supported attributes:
+     - tvg-id, tvg-name, tvg-logo, group-title
+     - tvg-type (or #EXTGRP)  → stream type
+     - #KODIPROP:inputstream.adaptive.license_key=KID:KEY
+     - #KODIPROP:inputstream.adaptive.license_type=clearkey|widevine
+     - #KODIPROP:inputstream.adaptive.manifest_type=mpd|hls
+     - #EXTVLCOPT:http-user-agent=...
+     - #EXT-X-STREAM-INF (basic passthrough as url)
+   ============================================================ */
+function parseM3U(text) {
+    const lines = text.replace(/\r/g, '').split('\n');
+    const channels = [];
+
+    let pending = null; // holds metadata for the next URL line
+
+    for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        const line = raw.trim();
+        if (!line) continue;
+
+        // ---------- #EXTINF ----------
+        if (line.startsWith('#EXTINF:')) {
+            if (pending) { flushPending(pending, channels); }
+            pending = {
+                attrs: parseExtinfAttrs(line),
+                displayName: extractDisplayName(line),
+                kid: null,
+                key: null,
+                licenseKey: null,
+                licenseUrl: null,
+                manifestType: null,
+                licenseType: null,
+                userAgent: null,
+                referrer: null
+            };
+            continue;
+        }
+
+        // ---------- #EXTGRP ----------
+        if (line.startsWith('#EXTGRP:')) {
+            if (pending) pending.attrs['group-title'] = line.slice(8).trim();
+            continue;
+        }
+
+        // ---------- #KODIPROP ----------
+        if (line.startsWith('#KODIPROP:')) {
+            if (!pending) continue;
+            const rest = line.slice(9).trim();
+            const eqIdx = rest.indexOf('=');
+            if (eqIdx === -1) continue;
+            const k = rest.slice(0, eqIdx).trim().toLowerCase();
+            const v = rest.slice(eqIdx + 1).trim();
+
+            if (k.endsWith('license_key')) {
+                pending.licenseKey = v;
+                // If value is "kid:key" format, split it
+                if (v.includes(':')) {
+                    const [a, b] = v.split(':');
+                    pending.kid = a;
+                    pending.key = b;
+                }
+            } else if (k.endsWith('license_type')) {
+                pending.licenseType = v.toLowerCase();
+            } else if (k.endsWith('manifest_type')) {
+                pending.manifestType = v.toLowerCase();
+            }
+            continue;
+        }
+
+        // ---------- #EXTVLCOPT ----------
+        if (line.startsWith('#EXTVLCOPT:')) {
+            if (!pending) continue;
+            const rest = line.slice(11).trim();
+            const eqIdx = rest.indexOf('=');
+            if (eqIdx === -1) continue;
+            const k = rest.slice(0, eqIdx).trim().toLowerCase();
+            const v = rest.slice(eqIdx + 1).trim();
+            if (k === 'http-user-agent') pending.userAgent = v;
+            if (k === 'http-referrer')   pending.referrer = v;
+            continue;
+        }
+
+        // ---------- #EXTVLCOPT:http-user-agent=... ----------
+        if (line.startsWith('#EXTVLCOPT')) {
+            if (!pending) continue;
+            const rest = line.slice(10).replace(/^:/, '').trim();
+            const eqIdx = rest.indexOf('=');
+            if (eqIdx === -1) continue;
+            const k = rest.slice(0, eqIdx).trim().toLowerCase();
+            const v = rest.slice(eqIdx + 1).trim();
+            if (k === 'http-user-agent') pending.userAgent = v;
+            if (k === 'http-referrer')   pending.referrer = v;
+            continue;
+        }
+
+        // ---------- comments / other #-lines ----------
+        if (line.startsWith('#')) continue;
+
+        // ---------- URL line ----------
+        if (pending) {
+            pending.url = line;
+            flushPending(pending, channels);
+            pending = null;
+        } else {
+            // URL without #EXTINF — bare URL
+            channels.push({
+                name: line.split('/').pop() || 'Stream',
+                type: 'm3u8',
+                category: 'uncategorized',
+                src: line,
+                logo: ''
+            });
+        }
+    }
+
+    if (pending && pending.url) flushPending(pending, channels);
+
+    return channels;
+}
+
+function parseExtinfAttrs(line) {
+    const attrs = {};
+    // Extract the attribute string after the comma-position (tvg-id="...")
+    // We match key="value" pairs anywhere in the EXTINF line
+    const re = /([a-zA-Z0-9\-_]+)\s*=\s*"([^"]*)"/g;
+    let m;
+    while ((m = re.exec(line)) !== null) {
+        attrs[m[1].toLowerCase()] = m[2];
+    }
+    return attrs;
+}
+
+function extractDisplayName(line) {
+    // Everything after the LAST comma following the attribute block
+    // Format: #EXTINF:-1 tvg-id="..." group-title="...",Channel Name
+    const lastComma = line.lastIndexOf(',');
+    if (lastComma === -1) return '';
+    return line.slice(lastComma + 1).trim();
+}
+
+function flushPending(pending, out) {
+    if (!pending.url) return;
+    const a = pending.attrs || {};
+
+    let type = (a['tvg-type'] || pending.manifestType || '').toLowerCase();
+    if (!type) {
+        type = pending.url.includes('.mpd') ? 'mpd' : 'm3u8';
+    }
+    if (type === 'application/dash+xml') type = 'mpd';
+    if (type === 'application/x-mpegurl' || type === 'application/vnd.apple.mpegurl') type = 'm3u8';
+
+    const name = a['tvg-name'] || pending.displayName || pending.url.split('/').pop() || 'Unnamed';
+    const category = a['group-title'] || 'uncategorized';
+    const logo = a['tvg-logo'] || '';
+
+    const ch = {
+        name,
+        type,
+        category,
+        src: pending.url,
+        logo
+    };
+
+    if (a['tvg-id']) ch.tvgId = a['tvg-id'];
+
+    if (pending.kid && pending.key) {
+        ch.kid = pending.kid;
+        ch.key = pending.key;
+    }
+    if (pending.licenseKey) ch.licenseKey = pending.licenseKey;
+    if (pending.licenseUrl) ch.licenseUrl = pending.licenseUrl;
+    if (pending.licenseType) ch.licenseType = pending.licenseType;
+    if (pending.userAgent) ch.userAgent = pending.userAgent;
+    if (pending.referrer)  ch.referrer = pending.referrer;
+
+    // Optional extended attributes
+    if (a['tvg-shift']) ch.tvgShift = a['tvg-shift'];
+    if (a['radio'])     ch.radio = a['radio'];
+
+    out.push(ch);
+}
+
+/* ============================================================
    CHANNEL HELPERS
    ============================================================ */
 function getChannelDisplayName(ch) {
@@ -753,7 +938,7 @@ function getStreamTypeInfo(ch) {
         if (ch?.licenseUrl) return { label: 'WIDEVINE', className: 'type-widevine' };
         return { label: 'MPD', className: 'type-mpd' };
     }
-    if (type === 'hls' || type === 'custom-hls') return { label: 'M3U8', className: 'type-hls' };
+    if (type === 'hls' || type === 'custom-hls' || type === 'm3u8') return { label: 'M3U8', className: 'type-hls' };
     if (type === 'audio') return { label: 'AUDIO', className: 'type-audio' };
 
     if (source.includes('.mpd')) return { label: 'MPD', className: 'type-mpd' };
@@ -780,7 +965,6 @@ function isConvergeChannel(ch) {
    URL COMPATIBILITY
    ============================================================ */
 function getProxiedUrl(originalUrl) {
-    // Route ALL HTTP streams through the Koyeb proxy
     if (originalUrl.startsWith('http://') || isConvergeUrl(originalUrl)) {
         return PROXY_URL + '?url=' + encodeURIComponent(originalUrl);
     }
@@ -931,10 +1115,6 @@ async function resetShakaPlayer(detach = false) {
 
 /* ============================================================
    SHAKA PLAYER SETUP
-   ------------------------------------------------------------
-   KEY FEATURE: Uses Shaka's networking engine to automatically
-   route ALL requests (manifest + segments) through the Koyeb
-   proxy. This is the same trick that made Hallypop work.
    ============================================================ */
 async function ensureShakaPlayer() {
     if (!shaka.Player.isBrowserSupported()) return null;
@@ -954,25 +1134,18 @@ async function ensureShakaPlayer() {
         await shakaPlayer.attach(video);
     }
 
-    // ------------------------------------------------------------
-    // Install the networking filters (once)
-    // ------------------------------------------------------------
     if (!shakaPlayer._proxyFiltersInstalled) {
         const netEngine = shakaPlayer.getNetworkingEngine();
         if (netEngine) {
             netEngine.registerRequestFilter((type, request) => {
                 const originalUri = request.uris[0];
-                // Skip anything already going to our proxy
                 if (originalUri.startsWith(PROXY_BASE)) return;
-                // Proxy HTTP streams (Converge) automatically
                 if (originalUri.startsWith('http://')) {
                     request.uris[0] = PROXY_URL + '?url=' + encodeURIComponent(originalUri);
                 }
             });
 
             netEngine.registerResponseFilter((type, response) => {
-                // Restore the "true" original URL so relative paths resolve correctly.
-                // We detect if the manifest came from our proxy and reverse-map it.
                 if (type === shaka.net.NetworkingEngine.RequestType.MANIFEST) {
                     const reqUrl = response.originalRequest && response.originalRequest.uris[0];
                     if (reqUrl && reqUrl.startsWith(PROXY_URL)) {
@@ -1232,9 +1405,6 @@ async function playHLS(url, subUrl) {
 
 /* ============================================================
    ENGINE: MPD (Shaka Player)
-   ------------------------------------------------------------
-   Uses the networking engine's automatic proxy routing —
-   pass the ORIGINAL URL, filters will route it through Koyeb.
    ============================================================ */
 async function playMPD(url, kid, key, subUrl, licenseKey, licenseUrl) {
     spinner.classList.add('active');
@@ -1323,7 +1493,6 @@ async function playMPD(url, kid, key, subUrl, licenseKey, licenseUrl) {
         };
         player.configure(config);
 
-        // Pass the ORIGINAL URL — request filter routes it through Koyeb.
         await player.load(url);
         spinner.classList.remove('active');
         requestAutoplay('mpd');
@@ -1433,15 +1602,11 @@ function playSelectedSource(channel, sourceUrl, label) {
     if (playerType === 'custom-dash') return playCustomMPD(channel.video, channel.audio, initialSub);
 
     const isMpd = url.includes('.mpd') || playerType === 'mpd';
-    const isHls = url.includes('.m3u8') || playerType === 'hls' || (url.startsWith('http://') && url.includes(':1935'));
+    const isHls = url.includes('.m3u8') || playerType === 'hls' || playerType === 'm3u8' || (url.startsWith('http://') && url.includes(':1935'));
 
     if (isMpd) {
-        // Pass ORIGINAL URL — the Shaka networking engine automatically routes
-        // it through Koyeb.
         playMPD(url, channel.kid, channel.key, initialSub, channel.licenseKey, channel.licenseUrl);
     } else if (isHls) {
-        // HLS uses hls.js which doesn't have the same filter system.
-        // We route through Koyeb manually.
         const proxiedUrl = getProxiedUrl(url);
         playHLS(proxiedUrl, initialSub);
     } else {
@@ -1461,7 +1626,7 @@ function renderChannels() {
             <div class="empty-state">
                 <div style="font-size:32px; margin-bottom:8px;">📭</div>
                 No channels found.<br>
-                Make sure <code>channels.js</code> exists.
+                Make sure <code>channels.m3u</code> exists.
             </div>
         `;
         totalChannelsEl.textContent = '0 Channels';
@@ -1475,7 +1640,7 @@ function renderChannels() {
     const filtered = CHANNELS.filter(ch => {
         const matchesSearch = ch.name.toLowerCase().includes(q);
         const matchesCat = currentCategory === 'all' ||
-                           (ch.category || '').split(/\s+/).includes(currentCategory);
+                           (ch.category || '').split(/[;\s]+/).includes(currentCategory);
         const matchesView =
             currentViewFilter === 'all' ||
             (currentViewFilter === 'pinned' && isPinned(ch)) ||
@@ -1584,7 +1749,7 @@ function navigate(direction) {
     const visible = CHANNELS.filter(ch => {
         const q = searchInput.value.trim().toLowerCase();
         return ch.name.toLowerCase().includes(q) &&
-               (currentCategory === 'all' || (ch.category || '').split(/\s+/).includes(currentCategory));
+               (currentCategory === 'all' || (ch.category || '').split(/[;\s]+/).includes(currentCategory));
     });
     if (!visible.length) return;
 
@@ -1608,37 +1773,20 @@ document.addEventListener('click', handleUserAudioUnlock);
 document.addEventListener('touchstart', handleUserAudioUnlock, { passive: true });
 
 /* ============================================================
-   LOAD CHANNELS FROM channels.js
+   LOAD CHANNELS FROM channels.m3u
    ============================================================ */
-function loadChannelsFromScript() {
-    return new Promise((resolve) => {
-        if (Array.isArray(window.CHANNELS) && window.CHANNELS.length > 0) {
-            console.log(`✓ Loaded ${window.CHANNELS.length} channels from window.CHANNELS`);
-            resolve(window.CHANNELS);
-            return;
-        }
-
-        const script = document.createElement('script');
-        script.src = './channels.js';
-        script.async = true;
-
-        script.onload = () => {
-            if (Array.isArray(window.CHANNELS)) {
-                console.log(`✓ Loaded ${window.CHANNELS.length} channels from ./channels.js`);
-                resolve(window.CHANNELS);
-            } else {
-                console.warn('⚠ channels.js did not export window.CHANNELS');
-                resolve([]);
-            }
-        };
-
-        script.onerror = () => {
-            console.error('✗ Failed to load ./channels.js');
-            resolve([]);
-        };
-
-        document.head.appendChild(script);
-    });
+async function loadChannelsFromM3U() {
+    try {
+        const res = await fetch('./channels.m3u', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = await res.text();
+        const parsed = parseM3U(text);
+        console.log(`✓ Parsed ${parsed.length} channels from channels.m3u`);
+        return parsed;
+    } catch (e) {
+        console.error('✗ Failed to load ./channels.m3u:', e.message);
+        return [];
+    }
 }
 
 /* ============================================================
@@ -1649,11 +1797,9 @@ async function init() {
     prepareAutoplay();
     showControls();
 
-    // Check proxy in parallel
     checkProxyHealth();
 
-    // Load channels
-    CHANNELS = await loadChannelsFromScript();
+    CHANNELS = await loadChannelsFromM3U();
     CHANNELS.forEach((ch, i) => ch._index = i);
 
     renderChannels();
